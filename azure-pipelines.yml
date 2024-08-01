@@ -3,15 +3,13 @@ parameters:
     displayName: APIM instance name
     type: string
     default: MIARG3-APIM-DEVNFNTY001
-    #default: MIARG3-APIM-CRTNFNTY001
   - name: RESOURCE_GROUP_NAME
     displayName: APIM instance resource group name
     type: string
     default: MIARG3-RG-DEVNFNTY001
-    #default: MIARG3-RG-CRTNFNTY001
   - name: APIM_REPOSITORY_NAME
     type: string
-    default: ValentinGarciaIriart/API_Management
+    default: API_Management
     displayName: APIM repository for pull request
   - name: API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH
     type: string
@@ -37,14 +35,6 @@ parameters:
       - OpenAPIV2Json
 
 trigger: none
-
-resources:
-  repositories:
-    - repository: githubRepo
-      type: github
-      name: ValentinGarciaIriart/API_Management
-      ref: refs/heads/main
-      endpoint: SC-Github-Valen  # Nombre de la conexión de servicio de GitHub
 
 variables:
   - group: apim-automation
@@ -169,7 +159,6 @@ stages:
               API_SPECIFICATION_FORMAT: ${{ parameters.API_SPECIFICATION_FORMAT }}
               ${{ if ne( parameters['CONFIGURATION_YAML_PATH'], 'Extract All' ) }}:
                 CONFIGURATION_YAML_PATH: ${{ parameters.CONFIGURATION_YAML_PATH }}
-          #Running Super Linting Tool on the API(s) - START
           - task: NodeTool@0
             inputs:
               versionSpec: '20.x'
@@ -192,7 +181,6 @@ stages:
               searchFolder: $(Build.ArtifactStagingDirectory)
               testRunTitle: 'Linting results for API $(Build.SourceBranchName)'
               failTaskOnFailedTests: false
-          #Running Super Linting Tool on the API(s) - END
           - task: PublishPipelineArtifact@1
             displayName: Publish pipeline artifact
             inputs:
@@ -245,8 +233,9 @@ stages:
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
 
-                Write-Information "Installing GitHub CLI..."
-                gh extension install github/gh-actions
+                Write-Information "Installing Azure DevOps extension..."
+                az extension add --name "azure-devops"
+                az devops configure --defaults organization="$(System.TeamFoundationCollectionUri)" project="$(System.TeamProject)"
 
                 Write-Information "Creating temporary folder..."
                 $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
@@ -291,8 +280,8 @@ stages:
                 }
                 
                 Write-Information "Setting git user information..."
-                git config --global user.email "azuredevopsagent@azuredevops.com"
-                git config --global user.name "Azure Devops agent"
+                git config --global user.email "valentingarciairiart@gmail.com"
+                git config --global user.name "ValentinGarciaIriart"
 
                 Write-Information "Adding changes..."
                 git -C "$temporaryFolderPath" add --all
@@ -309,17 +298,65 @@ stages:
                 }
 
                 Write-Information "Pushing changes"
-                git -C "$temporaryFolderPath" -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" push --set-upstream origin "$temporaryBranchName"
+                git -C "$temporaryFolderPath" -c http.extraheader="AUTHORIZATION: Bearer SC-Github-Valen" push --set-upstream origin "$temporaryBranchName"
                 if ($LASTEXITCODE -ne 0) { throw "Pushing Git changes failed." }
 
                 Write-Information "Creating pull request..."
-                gh pr create --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "This PR contains the artifacts extracted from APIM portal." --base "$branchName" --head "$temporaryBranchName"
+                az repos pr create --source-branch "$temporaryBranchName" --target-branch "$branchName" --title "Merging artifacts from portal (Build $(Build.BuildId))" --squash --delete-source-branch "true" --repository "$repositoryName"
                 if ($LASTEXITCODE -ne 0) { throw "Creating pull request failed." }
-
-                Write-Information "Deleting temporary folder contents..."
-                Remove-Item -Path "$temporaryFolderPath" -Recurse -Force
 
                 Write-Information "Execution complete."
               pwsh: true
             env:
-              GITHUB_TOKEN: SC-Github-Valen
+              AZURE_DEVOPS_EXT_PAT: SC-Github-Valen
+
+  - stage: merge_pull_request
+    displayName: Merge pull request after approval
+    dependsOn: create_template_branch
+    condition: succeeded('create_template_branch')
+    jobs:
+      - job: merge_pull_request
+        displayName: Merge Pull Request
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: PowerShell@2
+            displayName: Check PR Approval and Merge
+            inputs:
+              targetType: 'inline'
+              script: |
+                Set-StrictMode -Version Latest
+                $ErrorActionPreference = "Stop"
+                $VerbosePreference = "Continue"
+                $InformationPreference = "Continue"
+
+                Write-Information "Installing Azure DevOps extension..."
+                az extension add --name "azure-devops"
+                az devops configure --defaults organization="$(System.TeamFoundationCollectionUri)" project="$(System.TeamProject)"
+
+                $repositoryName = "${{ parameters.APIM_REPOSITORY_NAME }}"
+                $prTitle = "Merging artifacts from portal (Build $(Build.BuildId))"
+
+                Write-Information "Fetching Pull Request details..."
+                $prId = az repos pr list --repository "$repositoryName" --status "active" --query "[?title=='$prTitle'].id" --output tsv
+                if (-not $prId) {
+                  throw "No active Pull Request found with title '$prTitle'."
+                }
+
+                Write-Information "Pull Request ID: $prId"
+
+                Write-Information "Checking Pull Request approval status..."
+                $prStatus = az repos pr show --id "$prId" --query "status" --output tsv
+                if ($prStatus -ne "completed") {
+                  Write-Information "Pull Request is not yet approved."
+                  exit 1
+                }
+
+                Write-Information "Merging Pull Request..."
+                az repos pr merge --id "$prId" --repository "$repositoryName" --squash
+                if ($LASTEXITCODE -ne 0) { throw "Merging Pull Request failed." }
+
+                Write-Information "Execution complete."
+              pwsh: true
+            env:
+              AZURE_DEVOPS_EXT_PAT: SC-Github-Valen
