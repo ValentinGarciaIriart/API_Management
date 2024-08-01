@@ -11,7 +11,7 @@ parameters:
     #default: MIARG3-RG-CRTNFNTY001
   - name: APIM_REPOSITORY_NAME
     type: string
-    default: CI-CD Lab - Valentin García
+    default: API_Management
     displayName: APIM repository for pull request
   - name: API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH
     type: string
