@@ -11,7 +11,7 @@ parameters:
     #default: MIARG3-RG-CRTNFNTY001
   - name: APIM_REPOSITORY_NAME
     type: string
-    default: API_Management
+    default: ValentinGarciaIriart/API_Management
     displayName: APIM repository for pull request
   - name: API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH
     type: string
@@ -37,6 +37,14 @@ parameters:
       - OpenAPIV2Json
 
 trigger: none
+
+resources:
+  repositories:
+    - repository: githubRepo
+      type: github
+      name: ValentinGarciaIriart/API_Management
+      ref: refs/heads/main
+      endpoint: SC-Github-Valen  # Nombre de la conexión de servicio de GitHub
 
 variables:
   - group: apim-automation
@@ -161,7 +169,7 @@ stages:
               API_SPECIFICATION_FORMAT: ${{ parameters.API_SPECIFICATION_FORMAT }}
               ${{ if ne( parameters['CONFIGURATION_YAML_PATH'], 'Extract All' ) }}:
                 CONFIGURATION_YAML_PATH: ${{ parameters.CONFIGURATION_YAML_PATH }}
-          # Running Super Linting Tool on the API(s) - START
+          #Running Super Linting Tool on the API(s) - START
           - task: NodeTool@0
             inputs:
               versionSpec: '20.x'
@@ -184,7 +192,7 @@ stages:
               searchFolder: $(Build.ArtifactStagingDirectory)
               testRunTitle: 'Linting results for API $(Build.SourceBranchName)'
               failTaskOnFailedTests: false
-          # Running Super Linting Tool on the API(s) - END
+          #Running Super Linting Tool on the API(s) - END
           - task: PublishPipelineArtifact@1
             displayName: Publish pipeline artifact
             inputs:
@@ -197,21 +205,36 @@ stages:
             inputs:
               targetType: 'inline'
               script: |
-                az extension add --name azure-devops
-                az devops configure --defaults organization=https://dev.azure.com/$(organization) project=$(project)
-                az devops pipeline runs artifact publish --pipeline-id $(System.DefinitionId) --artifact-name pipeline-summary --path $(Build.ArtifactStagingDirectory)/pipeline-summary.json
-            env:
-              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+                outputFilePath="$(Build.ArtifactStagingDirectory)/run-extractor.md"
+                apiDirectoryPath="$(Build.ArtifactStagingDirectory)/artifacts"
+                cd "$apiDirectoryPath" # exclude top directory
+                
+                echo "# Azure APIM Modifications Summary" > "$outputFilePath"
+                echo "" >> "outputFilePath" #newline                
+                echo '```' >> "$outputFilePath"
+                tree -d --noreport -I "outputFilePath" | sed 's/^/    /' >> "$outputFilePath"
+                echo '```' >> "$outputFilePath"
 
-  - stage: create_pull_request
-    displayName: Create pull request
-    dependsOn: create_artifact_from_portal
+                # Display the path to the generated Markdown file
+                echo "Generated Markdown summary at $outputFilePath"
+
+                # Display the Markdown file in the pipeline summary
+                echo "##vso[task.uploadsummary]$outputFilePath"
+          
+  - stage: create_template_branch
+    displayName: Create template branch
     jobs:
-      - job: create_pull_request
-        displayName: Create pull request
+      - job: create_artifacts_pull_request
+        displayName: Create artifacts pull request
         pool:
           vmImage: ubuntu-latest
         steps:
+          - task: DownloadPipelineArtifact@2
+            displayName: Download pipeline artifact
+            inputs:
+              source: current
+              artifactName: artifacts-from-portal
+              targetPath: $(Pipeline.Workspace)/artifacts-from-portal
           - task: PowerShell@2
             displayName: Create pull request
             inputs:
@@ -223,8 +246,8 @@ stages:
                 $InformationPreference = "Continue"
 
                 Write-Information "Installing GitHub CLI..."
-                choco install gh --version 2.0.0 || true
-                
+                gh extension install github/gh-actions
+
                 Write-Information "Creating temporary folder..."
                 $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
                 New-Item -Path "$temporaryFolderPath" -ItemType "Directory"
@@ -233,9 +256,9 @@ stages:
                 $temporaryBranchName = "artifacts-from-portal-build-$(Build.BuildId)"
                 $repositoryName = "${{ parameters.APIM_REPOSITORY_NAME }}"
                 Write-Information "Cloning branch $branchName in repository $repositoryName..."
-                $cloneUrl = "https://github.com/$repositoryName.git"
+                $cloneUrl = az repos show --repository "$repositoryName" --query "remoteUrl" --output tsv
                 Write-Information "Clone URL is $cloneUrl"
-                git -c http.extraheader="Authorization: token $(System.AccessToken)" clone --branch "$branchName" --depth 1 "$cloneUrl" "$temporaryFolderPath"
+                git -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" clone --branch "$branchName" --depth 1 "$cloneUrl" "$temporaryFolderPath"
                 if ($LASTEXITCODE -ne 0) { throw "Cloning branch $branchName in repository $repositoryName failed." }
 
                 Write-Information "Creating temporary branch $temporaryBranchName from $branchName..."
@@ -286,11 +309,11 @@ stages:
                 }
 
                 Write-Information "Pushing changes"
-                git -C "$temporaryFolderPath" -c http.extraheader="Authorization: token $(System.AccessToken)" push --set-upstream origin "$temporaryBranchName"
+                git -C "$temporaryFolderPath" -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" push --set-upstream origin "$temporaryBranchName"
                 if ($LASTEXITCODE -ne 0) { throw "Pushing Git changes failed." }
 
                 Write-Information "Creating pull request..."
-                gh pr create --base "$branchName" --head "$temporaryBranchName" --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "Automatic PR for merging artifacts from the portal."
+                gh pr create --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "This PR contains the artifacts extracted from APIM portal." --base "$branchName" --head "$temporaryBranchName"
                 if ($LASTEXITCODE -ne 0) { throw "Creating pull request failed." }
 
                 Write-Information "Deleting temporary folder contents..."
@@ -298,5 +321,5 @@ stages:
 
                 Write-Information "Execution complete."
               pwsh: true
-              env:
-                SYSTEM_ACCESSTOKEN: "$(System.AccessToken)"
+            env:
+              GITHUB_TOKEN: SC-Github-Valen
