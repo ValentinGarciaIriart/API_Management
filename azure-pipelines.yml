@@ -312,6 +312,5 @@ stages:
                 Remove-Item -Path "$temporaryFolderPath" -Recurse -Force
 
                 Write-Information "Execution complete."
-            pwsh: true
             env:
               GITHUB_TOKEN: "$(System.AccessToken)"
