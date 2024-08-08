@@ -1,0 +1,43 @@
+#aca tengo que poner las configuraciones para el entorno de produccion, y tendria que hacer uno para QA
+#para dev no es necesario ya que es la configuracion base (la fuente)
+apimServiceName: MIARG3-APIM-CRTNFNTY001
+namedValues:
+  - name: pruebagit
+    properties:
+      displayName: test_git
+      value: "{#var1#}"
+      secret: true
+      tags: 
+        - "produccion1"
+        - "jesustest"
+        - "github"
+loggers:
+diagnostics:
+backends:
+  - name: backend-prueba
+    properties: 
+      url: "http://jesusbackendprod.api"
+policyFragments:
+  - name: fragment-test
+    properties:
+      description: "Fragment modificado para produccion"
+tags:
+  - name: dev-tag
+    properties:
+      displayName: prod-tag
+apis:
+  - name: api-http-manual
+    properties:
+      displayName: api-test-http-1000
+      tags:
+        - "prod_api"
+products:
+  - name: starter
+    properties:
+      displayName: starter_prod
+
+# si no hay cambios en los recursos del artifact que obtiene el extractor (entorno DEV) no se va a aplicar ningun cambio de PROMOCION
+# esto es, por mas que yo cambie un namedvalue, p.e, que esta en PROD, su valor no va a modificarse incluso se promocione otro recurso
+# se promociona todo lo que este dentro del artifact y se modifica el valor (o no) en base a este archivo y su definicion
+
+#toca cosas del path entre apis
