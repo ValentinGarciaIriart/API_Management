@@ -302,7 +302,7 @@ stages:
 
                 Write-Information "Creating pull request..."
                 $githubApiUrl = "https://api.github.com"
-                $createPrUri = "$githubApiUrl/repos/$repositoryName/pulls"
+                $createPrUri = "$githubApiUrl/repos/$repoOwner/$repositoryName/pulls"
                 $prTitle = "Merging artifacts from portal (Build $(Build.BuildId))"
                 $prBody = "This PR merges artifacts from portal build $(Build.BuildId)."
                 $prPayload = @{
