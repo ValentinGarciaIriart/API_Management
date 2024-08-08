@@ -8,26 +8,26 @@ parameters:
     type: string
     default: MIARG3-RG-DEVNFNTY001
   - name: APIM_REPOSITORY_NAME
+    displayName: APIM repository for pull request
     type: string
     default: API_Management
-    displayName: APIM repository for pull request
   - name: API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH
+    displayName: Folder where you want to extract the artifacts
     type: string
     default: artifacts
-    displayName: Folder where you want to extract the artifacts
   - name: TARGET_BRANCH_NAME
-    type: string
     displayName: Target branch for pull request
+    type: string
     default: main
   - name: CONFIGURATION_YAML_PATH
-    type: string
     displayName: Optional configuration file
+    type: string
     values:
       - Extract All
       - configuration.extractor.yaml
   - name: API_SPECIFICATION_FORMAT
-    type: string
     displayName: API Specification Format
+    type: string
     values:
       - OpenAPIV3Yaml
       - OpenAPIV3Json
@@ -82,9 +82,9 @@ stages:
                 else {
                   Write-Host "AZURE_SUBSCRIPTION_ID is already set to: $env:AZURE_SUBSCRIPTION_ID"
                 }
-
               addSpnToEnvironment: true
               failOnStandardError: true
+
           - task: PowerShell@2
             displayName: Fetch extractor
             inputs:
@@ -131,6 +131,7 @@ stages:
                 Write-Information "Execution complete."
               failOnStderr: true
               pwsh: true
+
           - task: PowerShell@2
             displayName: Run extractor
             inputs:
@@ -157,8 +158,9 @@ stages:
               API_MANAGEMENT_SERVICE_NAME: ${{ parameters.APIM_INSTANCE_NAME }}
               API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH: $(Build.ArtifactStagingDirectory)/${{ parameters.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
               API_SPECIFICATION_FORMAT: ${{ parameters.API_SPECIFICATION_FORMAT }}
-              ${{ if ne( parameters['CONFIGURATION_YAML_PATH'], 'Extract All' ) }}:
+              ${{ if ne(parameters.CONFIGURATION_YAML_PATH, 'Extract All') }}:
                 CONFIGURATION_YAML_PATH: ${{ parameters.CONFIGURATION_YAML_PATH }}
+
           - task: NodeTool@0
             inputs:
               versionSpec: '20.x'
@@ -173,7 +175,7 @@ stages:
             displayName: 'Run Spectral Linting'
             continueOnError: true
             failOnStderr: true
-          
+
           - task: PublishTestResults@2
             inputs:
               testResultsFormat: 'JUnit'
@@ -181,6 +183,7 @@ stages:
               searchFolder: $(Build.ArtifactStagingDirectory)
               testRunTitle: 'Linting results for API $(Build.SourceBranchName)'
               failTaskOnFailedTests: false
+
           - task: PublishPipelineArtifact@1
             displayName: Publish pipeline artifact
             inputs:
@@ -198,7 +201,7 @@ stages:
                 cd "$apiDirectoryPath" # exclude top directory
                 
                 echo "# Azure APIM Modifications Summary" > "$outputFilePath"
-                echo "" >> "outputFilePath" #newline                
+                echo "" >> "$outputFilePath" #newline                
                 echo '```' >> "$outputFilePath"
                 tree -d --noreport -I "outputFilePath" | sed 's/^/    /' >> "$outputFilePath"
                 echo '```' >> "$outputFilePath"
@@ -208,7 +211,7 @@ stages:
 
                 # Display the Markdown file in the pipeline summary
                 echo "##vso[task.uploadsummary]$outputFilePath"
-          
+
   - stage: create_template_branch
     displayName: Create template branch
     jobs:
@@ -223,6 +226,7 @@ stages:
               source: current
               artifactName: artifacts-from-portal
               targetPath: $(Pipeline.Workspace)/artifacts-from-portal
+
           - task: PowerShell@2
             displayName: Create pull request
             inputs:
@@ -233,9 +237,8 @@ stages:
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
 
-                Write-Information "Installing Azure DevOps extension..."
-                az extension add --name "azure-devops"
-                az devops configure --defaults organization="$(System.TeamFoundationCollectionUri)" project="$(System.TeamProject)"
+                Write-Information "Installing GitHub CLI..."
+                Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://cli.github.com/install.ps1')
 
                 Write-Information "Creating temporary folder..."
                 $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
@@ -245,7 +248,7 @@ stages:
                 $temporaryBranchName = "artifacts-from-portal-build-$(Build.BuildId)"
                 $repositoryName = "${{ parameters.APIM_REPOSITORY_NAME }}"
                 Write-Information "Cloning branch $branchName in repository $repositoryName..."
-                $cloneUrl = az repos show --repository "$repositoryName" --query "remoteUrl" --output tsv
+                $cloneUrl = "https://github.com/ValentinGarciaIriart/$repositoryName.git"
                 Write-Information "Clone URL is $cloneUrl"
                 git -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" clone --branch "$branchName" --depth 1 "$cloneUrl" "$temporaryFolderPath"
                 if ($LASTEXITCODE -ne 0) { throw "Cloning branch $branchName in repository $repositoryName failed." }
@@ -280,8 +283,8 @@ stages:
                 }
                 
                 Write-Information "Setting git user information..."
-                git config --global user.email "valentingarciairiart@gmail.com"
-                git config --global user.name "ValentinGarciaIriart"
+                git config --global user.email "github-actions[bot]@users.noreply.github.com"
+                git config --global user.name "GitHub Actions"
 
                 Write-Information "Adding changes..."
                 git -C "$temporaryFolderPath" add --all
@@ -298,65 +301,17 @@ stages:
                 }
 
                 Write-Information "Pushing changes"
-                git -C "$temporaryFolderPath" -c http.extraheader="AUTHORIZATION: Bearer SC-Github-Valen" push --set-upstream origin "$temporaryBranchName"
+                git -C "$temporaryFolderPath" -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" push --set-upstream origin "$temporaryBranchName"
                 if ($LASTEXITCODE -ne 0) { throw "Pushing Git changes failed." }
 
                 Write-Information "Creating pull request..."
-                az repos pr create --source-branch "$temporaryBranchName" --target-branch "$branchName" --title "Merging artifacts from portal (Build $(Build.BuildId))" --squash --delete-source-branch "true" --repository "$repositoryName"
-                if ($LASTEXITCODE -ne 0) { throw "Creating pull request failed." }
+                gh auth login --with-token < $(System.AccessToken)
+                gh pr create --repo "ValentinGarciaIriart/$repositoryName" --head "$temporaryBranchName" --base "$branchName" --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "Automated pull request to sync artifacts from portal."
+
+                Write-Information "Deleting temporary folder contents..."
+                Remove-Item -Path "$temporaryFolderPath" -Recurse -Force
 
                 Write-Information "Execution complete."
-              pwsh: true
+            #pwsh: true
             env:
-              AZURE_DEVOPS_EXT_PAT: SC-Github-Valen
-
-  - stage: merge_pull_request
-    displayName: Merge pull request after approval
-    dependsOn: create_template_branch
-    condition: succeeded('create_template_branch')
-    jobs:
-      - job: merge_pull_request
-        displayName: Merge Pull Request
-        pool:
-          vmImage: ubuntu-latest
-        steps:
-          - task: PowerShell@2
-            displayName: Check PR Approval and Merge
-            inputs:
-              targetType: 'inline'
-              script: |
-                Set-StrictMode -Version Latest
-                $ErrorActionPreference = "Stop"
-                $VerbosePreference = "Continue"
-                $InformationPreference = "Continue"
-
-                Write-Information "Installing Azure DevOps extension..."
-                az extension add --name "azure-devops"
-                az devops configure --defaults organization="$(System.TeamFoundationCollectionUri)" project="$(System.TeamProject)"
-
-                $repositoryName = "${{ parameters.APIM_REPOSITORY_NAME }}"
-                $prTitle = "Merging artifacts from portal (Build $(Build.BuildId))"
-
-                Write-Information "Fetching Pull Request details..."
-                $prId = az repos pr list --repository "$repositoryName" --status "active" --query "[?title=='$prTitle'].id" --output tsv
-                if (-not $prId) {
-                  throw "No active Pull Request found with title '$prTitle'."
-                }
-
-                Write-Information "Pull Request ID: $prId"
-
-                Write-Information "Checking Pull Request approval status..."
-                $prStatus = az repos pr show --id "$prId" --query "status" --output tsv
-                if ($prStatus -ne "completed") {
-                  Write-Information "Pull Request is not yet approved."
-                  exit 1
-                }
-
-                Write-Information "Merging Pull Request..."
-                az repos pr merge --id "$prId" --repository "$repositoryName" --squash
-                if ($LASTEXITCODE -ne 0) { throw "Merging Pull Request failed." }
-
-                Write-Information "Execution complete."
-              pwsh: true
-            env:
-              AZURE_DEVOPS_EXT_PAT: SC-Github-Valen
+              GITHUB_TOKEN: "$(System.AccessToken)"
