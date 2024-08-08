@@ -201,31 +201,37 @@ stages:
                 cd "$apiDirectoryPath" # exclude top directory
                 
                 echo "# Azure APIM Modifications Summary" > "$outputFilePath"
-                echo "" >> "$outputFilePath" #newline                
-                echo '```' >> "$outputFilePath"
-                tree -d --noreport -I "outputFilePath" | sed 's/^/    /' >> "$outputFilePath"
-                echo '```' >> "$outputFilePath"
+                echo "## Extractor results" >> "$outputFilePath"
+                ls -R -1 >> "$outputFilePath"
 
-                # Display the path to the generated Markdown file
-                echo "Generated Markdown summary at $outputFilePath"
+                echo "## Results of Spectral Linter" >> "$outputFilePath"
+                cat "$apiDirectoryPath/spectral-result.xml" >> "$outputFilePath"
+                echo "Extracted artifacts are located in $(Build.ArtifactStagingDirectory)/artifacts." >> "$outputFilePath"
+                echo "Total files extracted: $(ls -1 $(Build.ArtifactStagingDirectory)/artifacts | wc -l)." >> "$outputFilePath"
+                echo "### Log of extractor run" >> "$outputFilePath"
+                tail -n 10 "$(Pipeline.Workspace)/extractor.log" >> "$outputFilePath"
+                echo "### End of log" >> "$outputFilePath"
 
-                # Display the Markdown file in the pipeline summary
-                echo "##vso[task.uploadsummary]$outputFilePath"
+                echo "## Pipeline Summary" >> "$(Build.ArtifactStagingDirectory)/pipeline-summary.md"
 
-  - stage: create_template_branch
-    displayName: Create template branch
+                if [ -f "$outputFilePath" ]; then
+                    cat "$outputFilePath" >> "$(Build.ArtifactStagingDirectory)/pipeline-summary.md"
+                fi
+              failOnStderr: true
+              
+  - stage: create_pull_request
+    displayName: Create pull request
+    dependsOn: create_artifact_from_portal
     jobs:
-      - job: create_artifacts_pull_request
-        displayName: Create artifacts pull request
+      - job: create_pull_request
+        displayName: Create pull request
         pool:
           vmImage: ubuntu-latest
         steps:
-          - task: DownloadPipelineArtifact@2
-            displayName: Download pipeline artifact
-            inputs:
-              source: current
-              artifactName: artifacts-from-portal
-              targetPath: $(Pipeline.Workspace)/artifacts-from-portal
+          - script: |
+              sudo apt-get update
+              sudo apt-get install gh
+            displayName: 'Install GitHub CLI'
 
           - task: PowerShell@2
             displayName: Create pull request
@@ -236,9 +242,6 @@ stages:
                 $ErrorActionPreference = "Stop"
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
-
-                Write-Information "Installing GitHub CLI..."
-                Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://cli.github.com/install.ps1')
 
                 Write-Information "Creating temporary folder..."
                 $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
@@ -305,7 +308,7 @@ stages:
                 if ($LASTEXITCODE -ne 0) { throw "Pushing Git changes failed." }
 
                 Write-Information "Creating pull request..."
-                gh auth login --with-token $(System.AccessToken) #segun la IA es sin el <
+                gh auth login --with-token $(System.AccessToken) 
                 gh pr create --repo "ValentinGarciaIriart/$repositoryName" --head "$temporaryBranchName" --base "$branchName" --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "Automated pull request to sync artifacts from portal."
 
                 Write-Information "Deleting temporary folder contents..."
