@@ -235,7 +235,7 @@ stages:
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
 
-                $repositoryName = ${{ parameters.APIM_REPOSITORY_NAME }}
+                $repositoryName = "${{ parameters.APIM_REPOSITORY_NAME }}"
                 Write-Information "Cloning repository $repositoryName..."
                 $repositoryUrl = "https://github.com/$repositoryName.git"
                 $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
