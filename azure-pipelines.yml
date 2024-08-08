@@ -238,6 +238,7 @@ stages:
                 $repositoryName = "${{ parameters.APIM_REPOSITORY_NAME }}"
                 $repoOwner = "${{ parameters.REPO_OWNER }}"
                 $branchName = "${{ parameters.TARGET_BRANCH_NAME }}"
+                $temporaryBranchName = "artifacts-from-portal-build-$(Build.BuildId)"
                 Write-Information "Cloning repository $repositoryName..."
                 $repositoryUrl = "https://github.com/$repoOwner/$repositoryName.git"
                 $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
