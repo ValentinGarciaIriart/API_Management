@@ -33,14 +33,11 @@ parameters:
       - OpenAPIV3Json
       - OpenAPIV2Yaml
       - OpenAPIV2Json
-
 trigger: none
-
 variables:
   - group: apim-automation
   - name: System.Debug
     value: true
-
 stages:
   - stage: create_artifact_from_portal
     displayName: Create artifact from portal
@@ -61,7 +58,6 @@ stages:
                 $ErrorActionPreference = "Stop"
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
-
                 Write-Host "##vso[task.setvariable issecret=true;variable=AZURE_BEARER_TOKEN]$(az account get-access-token --query "accessToken" --output tsv)"
                 Write-Host "##vso[task.setvariable issecret=true;variable=AZURE_CLIENT_ID]$env:servicePrincipalId"
                 Write-Host "##vso[task.setvariable issecret=true;variable=AZURE_CLIENT_SECRET]$env:servicePrincipalKey"
@@ -84,7 +80,6 @@ stages:
                 }
               addSpnToEnvironment: true
               failOnStandardError: true
-
           - task: PowerShell@2
             displayName: Fetch extractor
             inputs:
@@ -94,11 +89,9 @@ stages:
                 $ErrorActionPreference = "Stop"
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
-
                 Write-Information "Setting name variables..."
                 $releaseFileName = "extractor-linux-x64.zip"
                 $executableFileName = "extractor"
-
                 if ("$(Agent.OS)" -like "*win*") {
                   $releaseFileName = "extractor-win-x64.zip"
                   $executableFileName = "extractor.exe"
@@ -109,29 +102,24 @@ stages:
                 elseif ("$(Agent.OS)" -like "*mac*" -and "$(Agent.OSArchitecture)" -like "*x86_64*") {
                   $releaseFileName = "extractor-osx-x64.zip"
                 }
-
                 Write-Information "Downloading release..."
                 $uri = "https://github.com/Azure/apiops/releases/download/$(apiops_release_version)/$releaseFileName"
                 $downloadFilePath = Join-Path "$(Agent.TempDirectory)" $releaseFileName
                 Invoke-WebRequest -Uri "$uri" -OutFile "$downloadFilePath"
-
                 Write-Information "Extracting release..."
                 $executableFolderPath = Join-Path "$(Agent.TempDirectory)" "extractor"
                 Expand-Archive -Path "$downloadFilePath" -DestinationPath "$executableFolderPath"
                 $executableFilePath = Join-Path "$executableFolderPath" $executableFileName
-
                 Write-Information "Setting file permissions..."
                 if ("$(Agent.OS)" -like "*linux*")
                 {
                   & chmod +x "$executableFilePath"
                   if ($LASTEXITCODE -ne 0) { throw "Setting file permissions failed."}
                 }
-
                 Write-Host "##vso[task.setvariable variable=EXTRACTOR_FILE_PATH]$executableFilePath"
                 Write-Information "Execution complete."
               failOnStderr: true
               pwsh: true
-
           - task: PowerShell@2
             displayName: Run extractor
             inputs:
@@ -141,10 +129,8 @@ stages:
                 $ErrorActionPreference = "Stop"
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
-
                 & "$(EXTRACTOR_FILE_PATH)"                
                 if ($LASTEXITCODE -ne 0) { throw "Running extractor failed."}
-
                 Write-Information "Execution complete."
               failOnStderr: true
               pwsh: true
@@ -160,22 +146,18 @@ stages:
               API_SPECIFICATION_FORMAT: ${{ parameters.API_SPECIFICATION_FORMAT }}
               ${{ if ne(parameters.CONFIGURATION_YAML_PATH, 'Extract All') }}:
                 CONFIGURATION_YAML_PATH: ${{ parameters.CONFIGURATION_YAML_PATH }}
-
           - task: NodeTool@0
             inputs:
               versionSpec: '20.x'
             displayName: 'Install Node.js'
-
           - script: |
               npm install -g @stoplight/spectral-cli
             displayName: 'Install Spectral'
-
           - script: |
               spectral lint --format stylish --format junit --output.junit $(Build.ArtifactStagingDirectory)/spectral-result.xml $(Build.ArtifactStagingDirectory)/${{ parameters.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}/apis/**/specification.{json,yaml,yml} -r https://raw.githubusercontent.com/connectedcircuits/devops-api-linter/main/rules.yaml
             displayName: 'Run Spectral Linting'
             continueOnError: true
             failOnStderr: true
-
           - task: PublishTestResults@2
             inputs:
               testResultsFormat: 'JUnit'
@@ -183,14 +165,12 @@ stages:
               searchFolder: $(Build.ArtifactStagingDirectory)
               testRunTitle: 'Linting results for API $(Build.SourceBranchName)'
               failTaskOnFailedTests: false
-
           - task: PublishPipelineArtifact@1
             displayName: Publish pipeline artifact
             inputs:
               targetPath: "$(Build.ArtifactStagingDirectory)"
               artifactType: pipeline
               artifactName: artifacts-from-portal
-
           - task: Bash@3
             displayName: 'Pipeline Summary Tab Upload'
             inputs:
@@ -201,38 +181,28 @@ stages:
                 cd "$apiDirectoryPath" # exclude top directory
                 
                 echo "# Azure APIM Modifications Summary" > "$outputFilePath"
-                echo "## Extractor results" >> "$outputFilePath"
-                ls -R -1 >> "$outputFilePath"
-
-                echo "## Results of Spectral Linter" >> "$outputFilePath"
-                cat "$apiDirectoryPath/spectral-result.xml" >> "$outputFilePath"
-                echo "Extracted artifacts are located in $(Build.ArtifactStagingDirectory)/artifacts." >> "$outputFilePath"
-                echo "Total files extracted: $(ls -1 $(Build.ArtifactStagingDirectory)/artifacts | wc -l)." >> "$outputFilePath"
-                echo "### Log of extractor run" >> "$outputFilePath"
-                tail -n 10 "$(Pipeline.Workspace)/extractor.log" >> "$outputFilePath"
-                echo "### End of log" >> "$outputFilePath"
-
-                echo "## Pipeline Summary" >> "$(Build.ArtifactStagingDirectory)/pipeline-summary.md"
-
-                if [ -f "$outputFilePath" ]; then
-                    cat "$outputFilePath" >> "$(Build.ArtifactStagingDirectory)/pipeline-summary.md"
-                fi
-              failOnStderr: true
-              
-  - stage: create_pull_request
-    displayName: Create pull request
-    dependsOn: create_artifact_from_portal
+                echo "" >> "$outputFilePath" #newline                
+                echo '```' >> "$outputFilePath"
+                tree -d --noreport -I "outputFilePath" | sed 's/^/    /' >> "$outputFilePath"
+                echo '```' >> "$outputFilePath"
+                # Display the path to the generated Markdown file
+                echo "Generated Markdown summary at $outputFilePath"
+                # Display the Markdown file in the pipeline summary
+                echo "##vso[task.uploadsummary]$outputFilePath"
+  - stage: create_template_branch
+    displayName: Create template branch
     jobs:
-      - job: create_pull_request
-        displayName: Create pull request
+      - job: create_artifacts_pull_request
+        displayName: Create artifacts pull request
         pool:
           vmImage: ubuntu-latest
         steps:
-          - script: |
-              sudo apt-get update
-              sudo apt-get install gh
-            displayName: 'Install GitHub CLI'
-
+          - task: DownloadPipelineArtifact@2
+            displayName: Download pipeline artifact
+            inputs:
+              source: current
+              artifactName: artifacts-from-portal
+              targetPath: $(Pipeline.Workspace)/artifacts-from-portal
           - task: PowerShell@2
             displayName: Create pull request
             inputs:
@@ -242,11 +212,11 @@ stages:
                 $ErrorActionPreference = "Stop"
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
-
+                Write-Information "Installing GitHub CLI..."
+                Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://cli.github.com/install.ps1')
                 Write-Information "Creating temporary folder..."
                 $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
                 New-Item -Path "$temporaryFolderPath" -ItemType "Directory"
-
                 $branchName = "${{ parameters.TARGET_BRANCH_NAME }}"
                 $temporaryBranchName = "artifacts-from-portal-build-$(Build.BuildId)"
                 $repositoryName = "${{ parameters.APIM_REPOSITORY_NAME }}"
@@ -255,17 +225,14 @@ stages:
                 Write-Information "Clone URL is $cloneUrl"
                 git -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" clone --branch "$branchName" --depth 1 "$cloneUrl" "$temporaryFolderPath"
                 if ($LASTEXITCODE -ne 0) { throw "Cloning branch $branchName in repository $repositoryName failed." }
-
                 Write-Information "Creating temporary branch $temporaryBranchName from $branchName..."
                 git -C "$temporaryFolderPath" checkout -b "$temporaryBranchName" "$branchName"
                 if ($LASTEXITCODE -ne 0) { throw "Creating temporary branch $temporaryBranchName from $branchName failed." }
-
                 Write-Information "Creating artifacts folder..."
                 $artifactFolderPath = Join-Path "$temporaryFolderPath" "${{ parameters.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}"
                 if ((Test-Path -Path "$artifactFolderPath") -eq $false) {
                     New-Item -Path "$artifactFolderPath" -ItemType "Directory"
                 }
-
                 Write-Information "Synchronizing artifacts..."
                 $extractorArtifactsFolderPath = Join-Path "$(Pipeline.Workspace)" "artifacts-from-portal" ${{ parameters.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
                 if ("$(Agent.OS)" -like "*win*") {
@@ -276,7 +243,6 @@ stages:
                     & rsync --verbose --archive --delete --force --recursive "$extractorArtifactsFolderPath/" "$artifactFolderPath/"
                     if ($LASTEXITCODE -ne 0) { throw "Setting $artifactFolderPath to contents of $extractorArtifactsFolderPath failed." }
                 }
-
                 Write-Information "Validating that changes exist to be published..."
                 $gitStatus = git -C "$temporaryFolderPath" status --porcelain
                 if ($LASTEXITCODE -ne 0) { throw "Getting git status failed." }
@@ -288,11 +254,9 @@ stages:
                 Write-Information "Setting git user information..."
                 git config --global user.email "github-actions[bot]@users.noreply.github.com"
                 git config --global user.name "GitHub Actions"
-
                 Write-Information "Adding changes..."
                 git -C "$temporaryFolderPath" add --all
                 if ($LASTEXITCODE -ne 0) { throw "Adding Git changes failed." }
-
                 Write-Information "Committing changes"
                 $commitOutput = git -C "$temporaryFolderPath" commit --message "Initial commit"
                 if ($LASTEXITCODE -ne 0) { 
@@ -302,18 +266,16 @@ stages:
                   }
                   throw "Committing Git changes failed." 
                 }
-
                 Write-Information "Pushing changes"
                 git -C "$temporaryFolderPath" -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" push --set-upstream origin "$temporaryBranchName"
                 if ($LASTEXITCODE -ne 0) { throw "Pushing Git changes failed." }
-
                 Write-Information "Creating pull request..."
-                gh auth login --with-token $(System.AccessToken) 
+                gh auth login --with-token < $(System.AccessToken)
+                gh auth login --with-token $(System.AccessToken) #segun la IA es sin el <
                 gh pr create --repo "ValentinGarciaIriart/$repositoryName" --head "$temporaryBranchName" --base "$branchName" --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "Automated pull request to sync artifacts from portal."
-
                 Write-Information "Deleting temporary folder contents..."
                 Remove-Item -Path "$temporaryFolderPath" -Recurse -Force
-
                 Write-Information "Execution complete."
+            #pwsh: true
             env:
               GITHUB_TOKEN: "$(System.AccessToken)"
