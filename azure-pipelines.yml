@@ -184,97 +184,56 @@ stages:
                 echo "" >> "$outputFilePath" #newline                
                 echo '```' >> "$outputFilePath"
                 tree -d --noreport -I "outputFilePath" | sed 's/^/    /' >> "$outputFilePath"
-                echo '```' >> "$outputFilePath"
-                # Display the path to the generated Markdown file
-                echo "Generated Markdown summary at $outputFilePath"
-                # Display the Markdown file in the pipeline summary
-                echo "##vso[task.uploadsummary]$outputFilePath"
-  - stage: create_template_branch
-    displayName: Create template branch
+                echo '```' >> "$outputFilePath"                
+                echo "" >> "$outputFilePath" #newline                
+                cat "$outputFilePath"
+              failOnStderr: true
+              pwsh: false
+  - stage: create_pull_request
+    displayName: Create pull request
+    dependsOn: create_artifact_from_portal
     jobs:
-      - job: create_artifacts_pull_request
-        displayName: Create artifacts pull request
+      - job: create_pull_request
+        displayName: Create pull request
         pool:
           vmImage: ubuntu-latest
         steps:
-          - task: DownloadPipelineArtifact@2
-            displayName: Download pipeline artifact
+          - script: |
+              gh --version
+            displayName: Check GitHub CLI version
+          - task: Bash@3
+            displayName: 'Install GitHub CLI'
             inputs:
-              source: current
-              artifactName: artifacts-from-portal
-              targetPath: $(Pipeline.Workspace)/artifacts-from-portal
+              targetType: 'inline'
+              script: |
+                echo "Installing GitHub CLI..."
+                ghVersion=$(gh --version)
+                echo "Current GitHub CLI version: $ghVersion"
+                if ! command -v gh &> /dev/null; then
+                  curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo gpg --dearmor -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+                  echo "deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list
+                  sudo apt update
+                  sudo apt install gh
+                else
+                  echo "GitHub CLI is already installed."
+                fi
+                gh --version
+              failOnStderr: true
+              pwsh: false
           - task: PowerShell@2
-            displayName: Create pull request
+            displayName: 'Create Pull Request'
             inputs:
-              targetType: "inline"
+              targetType: 'inline'
               script: |
                 Set-StrictMode -Version Latest
                 $ErrorActionPreference = "Stop"
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
-                Write-Information "Installing GitHub CLI..."
-                Invoke-Expression (New-Object System.Net.WebClient).DownloadString('https://cli.github.com/install.ps1')
-                Write-Information "Creating temporary folder..."
-                $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
-                New-Item -Path "$temporaryFolderPath" -ItemType "Directory"
-                $branchName = "${{ parameters.TARGET_BRANCH_NAME }}"
-                $temporaryBranchName = "artifacts-from-portal-build-$(Build.BuildId)"
-                $repositoryName = "${{ parameters.APIM_REPOSITORY_NAME }}"
-                Write-Information "Cloning branch $branchName in repository $repositoryName..."
-                $cloneUrl = "https://github.com/ValentinGarciaIriart/$repositoryName.git"
-                Write-Information "Clone URL is $cloneUrl"
-                git -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" clone --branch "$branchName" --depth 1 "$cloneUrl" "$temporaryFolderPath"
-                if ($LASTEXITCODE -ne 0) { throw "Cloning branch $branchName in repository $repositoryName failed." }
-                Write-Information "Creating temporary branch $temporaryBranchName from $branchName..."
-                git -C "$temporaryFolderPath" checkout -b "$temporaryBranchName" "$branchName"
-                if ($LASTEXITCODE -ne 0) { throw "Creating temporary branch $temporaryBranchName from $branchName failed." }
-                Write-Information "Creating artifacts folder..."
-                $artifactFolderPath = Join-Path "$temporaryFolderPath" "${{ parameters.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}"
-                if ((Test-Path -Path "$artifactFolderPath") -eq $false) {
-                    New-Item -Path "$artifactFolderPath" -ItemType "Directory"
-                }
-                Write-Information "Synchronizing artifacts..."
-                $extractorArtifactsFolderPath = Join-Path "$(Pipeline.Workspace)" "artifacts-from-portal" ${{ parameters.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
-                if ("$(Agent.OS)" -like "*win*") {
-                    & robocopy "$extractorArtifactsFolderPath" "$artifactFolderPath" /zb /mir /mt
-                    if ($LASTEXITCODE -gt 7) { throw "Setting $artifactFolderPath to contents of $extractorArtifactsFolderPath failed." }
-                }
-                else {
-                    & rsync --verbose --archive --delete --force --recursive "$extractorArtifactsFolderPath/" "$artifactFolderPath/"
-                    if ($LASTEXITCODE -ne 0) { throw "Setting $artifactFolderPath to contents of $extractorArtifactsFolderPath failed." }
-                }
-                Write-Information "Validating that changes exist to be published..."
-                $gitStatus = git -C "$temporaryFolderPath" status --porcelain
-                if ($LASTEXITCODE -ne 0) { throw "Getting git status failed." }
-                if ([string]::IsNullOrWhiteSpace($gitStatus)) {
-                    Write-Information "No changes exist to be published."
-                    return
-                }
-                
-                Write-Information "Setting git user information..."
-                git config --global user.email "github-actions[bot]@users.noreply.github.com"
-                git config --global user.name "GitHub Actions"
-                Write-Information "Adding changes..."
-                git -C "$temporaryFolderPath" add --all
-                if ($LASTEXITCODE -ne 0) { throw "Adding Git changes failed." }
-                Write-Information "Committing changes"
-                $commitOutput = git -C "$temporaryFolderPath" commit --message "Initial commit"
-                if ($LASTEXITCODE -ne 0) { 
-                  if ($commitOutput.Contains("nothing to commit, working tree clean")) {
-                    Write-Information "No changes exist to be published."
-                    return
-                  }
-                  throw "Committing Git changes failed." 
-                }
-                Write-Information "Pushing changes"
-                git -C "$temporaryFolderPath" -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" push --set-upstream origin "$temporaryBranchName"
-                if ($LASTEXITCODE -ne 0) { throw "Pushing Git changes failed." }
                 Write-Information "Creating pull request..."
-                gh auth login --with-token $(System.AccessToken) #segun la IA es sin el <
-                gh pr create --repo "ValentinGarciaIriart/$repositoryName" --head "$temporaryBranchName" --base "$branchName" --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "Automated pull request to sync artifacts from portal."
-                Write-Information "Deleting temporary folder contents..."
-                Remove-Item -Path "$temporaryFolderPath" -Recurse -Force
+                gh auth login --with-token $(GITHUB_TOKEN)
+                gh pr create --repo "ValentinGarciaIriart/${{ parameters.APIM_REPOSITORY_NAME }}" --head "$(Build.SourceBranchName)" --base "${{ parameters.TARGET_BRANCH_NAME }}" --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "Automated pull request to sync artifacts from portal."
                 Write-Information "Execution complete."
-            #pwsh: true
+              failOnStderr: true
+              pwsh: true
             env:
-              GITHUB_TOKEN: "$(System.AccessToken)"
+              GITHUB_TOKEN: $(GITHUB_TOKEN)
