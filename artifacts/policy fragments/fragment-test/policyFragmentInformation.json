@@ -1,0 +1,7 @@
+{
+  "properties": {
+    "description": ".",
+    "format": "rawxml",
+    "value": "\u003C!--\n    IMPORTANT:\n    - Policy fragment are included as-is whenever they are referenced.\n    - If using variables. Ensure they are setup before use.\n    - Copy and paste your code here or simply start coding\n--\u003E\r\n\u003Cfragment\u003E\r\n\u003C/fragment\u003E"
+  }
+}

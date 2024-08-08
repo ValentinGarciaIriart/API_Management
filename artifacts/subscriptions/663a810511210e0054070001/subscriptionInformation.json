@@ -1,0 +1,8 @@
+{
+  "properties": {
+    "scope": "/subscriptions/709b3dfa-b8c4-477b-b14e-0263b0fef0f2/resourceGroups/MIARG3-RG-DEVNFNTY001/providers/Microsoft.ApiManagement/service/MIARG3-APIM-DEVNFNTY001/products/starter",
+    "allowTracing": false,
+    "ownerId": "/subscriptions/709b3dfa-b8c4-477b-b14e-0263b0fef0f2/resourceGroups/MIARG3-RG-DEVNFNTY001/providers/Microsoft.ApiManagement/service/MIARG3-APIM-DEVNFNTY001/users/1",
+    "state": "active"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "properties": {
+    "path": "",
+    "apiRevision": "1",
+    "authenticationSettings": {
+      "oAuth2AuthenticationSettings": [],
+      "openidAuthenticationSettings": []
+    },
+    "description": "Es la primer API",
+    "isCurrent": true,
+    "displayName": "Test API_Dev1400",
+    "protocols": [
+      "https"
+    ],
+    "serviceUrl": "https://miarg3-apim-devnfnty001.azure-api.net",
+    "subscriptionKeyParameterNames": {
+      "header": "Ocp-Apim-Subscription-Key",
+      "query": "subscription-key"
+    },
+    "subscriptionRequired": false
+  }
+}
