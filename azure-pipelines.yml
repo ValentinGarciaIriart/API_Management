@@ -311,7 +311,7 @@ stages:
                   base = $branchName
                   body = $prBody
                 } | ConvertTo-Json
-                $response = Invoke-RestMethod -Uri $createPrUri -Method Post -Headers @{ Authorization = "token $(System.AccessToken)" } -Body $prPayload -ContentType "application/json"
+                $response = Invoke-RestMethod -Uri $createPrUri -Method Post -Headers @{ Authorization = "token $(GITHUB_TOKEN)" } -Body $prPayload -ContentType "application/json"
                 if ($response -eq $null -or $response.state -ne "open") { throw "Creating pull request failed." }
 
                 Write-Information "Deleting temporary folder contents..."
@@ -320,5 +320,5 @@ stages:
                 Write-Information "Execution complete."
               pwsh: true
             env:
-              SYSTEM_ACCESSTOKEN: "$(System.AccessToken)"
+              #SYSTEM_ACCESSTOKEN: "$(System.AccessToken)"
               GITHUB_TOKEN: "$(GITHUB_TOKEN)"
