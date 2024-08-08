@@ -270,7 +270,6 @@ stages:
                 git -C "$temporaryFolderPath" -c http.extraheader="AUTHORIZATION: Bearer $(System.AccessToken)" push --set-upstream origin "$temporaryBranchName"
                 if ($LASTEXITCODE -ne 0) { throw "Pushing Git changes failed." }
                 Write-Information "Creating pull request..."
-                gh auth login --with-token < $(System.AccessToken)
                 gh auth login --with-token $(System.AccessToken) #segun la IA es sin el <
                 gh pr create --repo "ValentinGarciaIriart/$repositoryName" --head "$temporaryBranchName" --base "$branchName" --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "Automated pull request to sync artifacts from portal."
                 Write-Information "Deleting temporary folder contents..."
