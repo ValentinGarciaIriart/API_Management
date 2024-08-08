@@ -266,7 +266,7 @@ stages:
             displayName: Create pull request
             inputs:
               targetType: inline
-              script: >
+              script: |
                 Set-StrictMode -Version Latest
 
                 $ErrorActionPreference = "Stop"
@@ -399,5 +399,5 @@ stages:
                 Remove-Item -Path "$temporaryFolderPath" -Recurse -Force
                 Write-Information "Execution complete."
               pwsh: true
-            env:
-              GITHUB_TOKEN: $(System.AccessToken)
+#            env:
+#              GITHUB_TOKEN: $(System.AccessToken)
