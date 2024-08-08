@@ -1,3 +1,4 @@
+---
 parameters:
   - name: REPO_OWNER
     displayName: Username of the repo owner
@@ -37,14 +38,11 @@ parameters:
       - OpenAPIV3Json
       - OpenAPIV2Yaml
       - OpenAPIV2Json
-
 trigger: none
-
 variables:
   - group: apim-automation
   - name: System.Debug
     value: true
-
 stages:
   - stage: create_artifact_from_portal
     displayName: Create artifact from portal
@@ -90,12 +88,12 @@ stages:
                         exit 1
                     }
                 }
+
                 else {
                   Write-Host "AZURE_SUBSCRIPTION_ID is already set to: $env:AZURE_SUBSCRIPTION_ID"
                 }
               addSpnToEnvironment: true
               failOnStandardError: true
-
           - task: PowerShell@2
             displayName: Fetch extractor
             inputs:
@@ -119,9 +117,11 @@ stages:
                   $releaseFileName = "extractor-win-x64.zip"
                   $executableFileName = "extractor.exe"
                 }
+
                 elseif ("$(Agent.OS)" -like "*mac*" -and "$(Agent.OSArchitecture)" -like "*arm*") {
                   $releaseFileName = "extractor-osx-arm64.zip"
                 }
+
                 elseif ("$(Agent.OS)" -like "*mac*" -and "$(Agent.OSArchitecture)" -like "*x86_64*") {
                   $releaseFileName = "extractor-osx-x64.zip"
                 }
@@ -154,7 +154,6 @@ stages:
                 Write-Information "Execution complete."
               failOnStderr: true
               pwsh: true
-
           - task: PowerShell@2
             displayName: Run extractor
             inputs:
@@ -181,16 +180,13 @@ stages:
               API_SPECIFICATION_FORMAT: ${{ parameters.API_SPECIFICATION_FORMAT }}
               "${{ if ne(parameters.CONFIGURATION_YAML_PATH, 'Extract All') }}":
                 CONFIGURATION_YAML_PATH: ${{ parameters.CONFIGURATION_YAML_PATH }}
-
           - task: NodeTool@0
             inputs:
               versionSpec: 20.x
             displayName: Install Node.js
-
           - script: |
               npm install -g @stoplight/spectral-cli
             displayName: Install Spectral
-
           - script: >
               spectral lint --format stylish --format junit --output.junit
               $(Build.ArtifactStagingDirectory)/spectral-result.xml
@@ -199,7 +195,6 @@ stages:
             displayName: Run Spectral Linting
             continueOnError: true
             failOnStderr: true
-
           - task: PublishTestResults@2
             inputs:
               testResultsFormat: JUnit
@@ -207,14 +202,12 @@ stages:
               searchFolder: $(Build.ArtifactStagingDirectory)
               testRunTitle: Linting results for API $(Build.SourceBranchName)
               failTaskOnFailedTests: false
-
           - task: PublishPipelineArtifact@1
             displayName: Publish pipeline artifact
             inputs:
               targetPath: $(Build.ArtifactStagingDirectory)
               artifactType: pipeline
               artifactName: artifacts-from-portal
-
           - task: Bash@3
             displayName: Pipeline Summary Tab Upload
             inputs:
@@ -234,51 +227,95 @@ stages:
 
                 # Get all files in the directory and output their names
 
-                find . -type f -name "*.json" -o -name "*.yaml" -o -name "*.yml" | while read file; do
-                  echo "#### $file" >> "$outputFilePath"
-                  echo '```' >> "$outputFilePath"
-                  cat "$file" >> "$outputFilePath"
-                  echo '```' >> "$outputFilePath"
-                  echo "" >> "$outputFilePath" #newline
-                done
+                find . -type f -name "*.json" -o -name "*.yaml" -o -name "*.yml" >> "$outputFilePath"
+
+                echo '```' >> "$outputFilePath"
 
                 echo "" >> "$outputFilePath" #newline
 
-                # Display the path to the generated Markdown file
+                echo "## Summary of Modifications" >> "$outputFilePath"
 
-                echo "Generated Markdown summary at $outputFilePath"
+                echo "" >> "$outputFilePath" #newline
 
-                # Display the Markdown file in the pipeline summary
+                echo "### Modified Files" >> "$outputFilePath"
 
-                echo "##vso[task.uploadsummary]$outputFilePath"
+                echo "" >> "$outputFilePath" #newline
 
-  - stage: create_template_branch
-    displayName: Create template branch
-    jobs:
-      - job: create_artifacts_pull_request
-        displayName: Create artifacts pull request
-        pool:
-          vmImage: ubuntu-latest
-        steps:
-          - task: DownloadPipelineArtifact@2
-            displayName: Download pipeline artifact
-            inputs:
-              source: current
-              artifactName: artifacts-from-portal
-              targetPath: $(Pipeline.Workspace)/artifacts-from-portal
+                echo "Modified files detected in this run." >> "$outputFilePath"
 
+                echo "" >> "$outputFilePath" #newline
+
+                echo "### Unmodified Files" >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "Unmodified files detected in this run." >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "### Full Content" >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "Full content of the files in the directory." >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "```" >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "### File Differences" >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "Differences between the files in the directory." >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "### Summary" >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "Summary of the modifications and any issues." >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "### Conclusion" >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "Conclusion of the modifications summary." >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                echo "## Logs" >> "$outputFilePath"
+
+                echo "" >> "$outputFilePath" #newline
+
+                # Add logs at the end of the file
+
+                echo "Logs of the extraction process." >> "$outputFilePath"
           - task: PowerShell@2
             displayName: Create pull request in GitHub
             inputs:
-              targetType: "inline"
+              targetType: inline
               script: |
                 Set-StrictMode -Version Latest
                 $ErrorActionPreference = "Stop"
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
-
+                
                 Write-Information "Installing GitHub CLI..."
-                winget install --id GitHub.cli
+                $linuxCommand = @"
+                curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /usr/share/keyrings/githubcli-archive-keyring.gpg > /dev/null
+                sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-key C99B11E6
+                sudo apt-add-repository https://cli.github.com/packages
+                sudo apt update
+                sudo apt install gh
+                "@
+
+                Invoke-Expression $linuxCommand
 
                 Write-Information "Creating temporary folder..."
                 $temporaryFolderPath = Join-Path "$(Agent.TempDirectory)" "artifacts-from-portal"
@@ -304,14 +341,8 @@ stages:
 
                 Write-Information "Synchronizing artifacts..."
                 $extractorArtifactsFolderPath = Join-Path "$(Pipeline.Workspace)" "artifacts-from-portal" ${{ parameters.API_MANAGEMENT_SERVICE_OUTPUT_FOLDER_PATH }}
-                if ("$(Agent.OS)" -like "*win*") {
-                    & robocopy "$extractorArtifactsFolderPath" "$artifactFolderPath" /zb /mir /mt
-                    if ($LASTEXITCODE -gt 7) { throw "Setting $artifactFolderPath to contents of $extractorArtifactsFolderPath failed." }
-                }
-                else {
-                    & rsync --verbose --archive --delete --force --recursive "$extractorArtifactsFolderPath/" "$artifactFolderPath/"
-                    if ($LASTEXITCODE -ne 0) { throw "Setting $artifactFolderPath to contents of $extractorArtifactsFolderPath failed." }
-                }
+                & rsync --verbose --archive --delete --force --recursive "$extractorArtifactsFolderPath/" "$artifactFolderPath/"
+                if ($LASTEXITCODE -ne 0) { throw "Setting $artifactFolderPath to contents of $extractorArtifactsFolderPath failed." }
 
                 Write-Information "Validating that changes exist to be published..."
                 $gitStatus = git -C "$temporaryFolderPath" status --porcelain
@@ -320,7 +351,7 @@ stages:
                     Write-Information "No changes exist to be published."
                     return
                 }
-                
+
                 Write-Information "Setting git user information..."
                 git config --global user.email "github-actions@github.com"
                 git config --global user.name "GitHub Actions"
@@ -352,10 +383,7 @@ stages:
                 Remove-Item -Path "$temporaryFolderPath" -Recurse -Force
 
                 Write-Information "Execution complete."
+              failOnStderr: true
               pwsh: true
             env:
-              GITHUB_TOKEN: "$(System.AccessToken)"
-
-
-#            env:
-#              GITHUB_TOKEN: $(System.AccessToken)
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
