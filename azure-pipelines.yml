@@ -230,10 +230,10 @@ stages:
                 $VerbosePreference = "Continue"
                 $InformationPreference = "Continue"
                 Write-Information "Creating pull request..."
-                gh auth login --with-token $(GITHUB_TOKEN)
+                gh auth login --with-token $(System.AccessToken)
                 gh pr create --repo "ValentinGarciaIriart/${{ parameters.APIM_REPOSITORY_NAME }}" --head "$(Build.SourceBranchName)" --base "${{ parameters.TARGET_BRANCH_NAME }}" --title "Merging artifacts from portal (Build $(Build.BuildId))" --body "Automated pull request to sync artifacts from portal."
                 Write-Information "Execution complete."
               failOnStderr: true
               pwsh: true
             env:
-              GITHUB_TOKEN: $(GITHUB_TOKEN)
+              GITHUB_TOKEN: $(System.AccessToken)
