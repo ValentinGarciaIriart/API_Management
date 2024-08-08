@@ -1,0 +1,15 @@
+{
+  "properties": {
+    "credentials": {
+      "header": {},
+      "query": {}
+    },
+    "description": "Este es un backend de prueba con un custom URL",
+    "protocol": "http",
+    "tls": {
+      "validateCertificateChain": true,
+      "validateCertificateName": true
+    },
+    "url": "http://jesusbackend.api"
+  }
+}

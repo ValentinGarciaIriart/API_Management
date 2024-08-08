@@ -1,0 +1,33 @@
+openapi: 3.0.1
+info:
+  title: Test API_Dev1400
+  description: Es la primer API
+  version: '1.0'
+servers:
+  - url: https://miarg3-apim-devnfnty001.azure-api.net
+paths:
+  /test:
+    get:
+      summary: Test call
+      description: Test call
+      operationId: test-call
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              example:
+                sampleField: prueba
+components:
+  securitySchemes:
+    apiKeyHeader:
+      type: apiKey
+      name: Ocp-Apim-Subscription-Key
+      in: header
+    apiKeyQuery:
+      type: apiKey
+      name: subscription-key
+      in: query
+security:
+  - apiKeyHeader: [ ]
+  - apiKeyQuery: [ ]

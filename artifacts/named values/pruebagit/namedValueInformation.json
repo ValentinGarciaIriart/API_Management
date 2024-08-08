@@ -1,0 +1,11 @@
+{
+  "properties": {
+    "displayName": "test_git",
+    "secret": false,
+    "tags": [
+      "desarrollo2052",
+      "publish"
+    ],
+    "value": "dev_es_plain"
+  }
+}
